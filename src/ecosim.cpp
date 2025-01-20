@@ -1,6 +1,8 @@
-
-#include "ecosim.h" 
-                       
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+#include "ecosim.h"
+#define REPORT(X) std::cout << #X << " = " << (X) << std::endl
 //################################################################----------
 // Runge-Kutta 4th order method for integrating Ecosim equations
 // Currently does not contain aged-structured species.
@@ -286,7 +288,33 @@ int y, m, dd;
    dd = StartYear * STEPS_PER_YEAR;
 
 // MAIN LOOP STARTS HERE
-// ASSUMES STEPS_PER_MONTH will always be 1.0, took out divisions     
+// ASSUMES STEPS_PER_MONTH will always be 1.0, took out divisions
+
+   // Axel's hack
+   const NumericMatrix EcopathCode = as<NumericMatrix>(stanzas["EcopathCode"]);
+   const NumericVector Nstanzas = as<NumericVector>(stanzas["Nstanzas"]);
+   int PerturbNstanza; // Number of stanzas of species
+   std::string perturbInfoFileName = "perturbInfoFile.txt";
+   bool doPerturb=false; // true if there is "perturbInfoFile.txt"
+   int PerturbYear; // year where pertubation happens
+   int PerturbSpeciesIndex; // index of perturbed species
+   int PerturbStGroup; // Stanza Group if positive
+   double factorPerturb; // multiplier to change biomass
+   
+   
+   std::ifstream perturbInfoFile(perturbInfoFileName);
+   if(perturbInfoFile.good()){
+     doPerturb = true;
+     perturbInfoFile >> PerturbYear >> PerturbSpeciesIndex >> PerturbNstanza >> PerturbStGroup >> factorPerturb;
+     std::cout << "StartYear " << StartYear << std::endl; // Print initial year
+     std::cout << "PerturbYear " << PerturbYear << std::endl; // Print perturbed year
+     std::cout << "PerturbSpeciesIndex " << PerturbSpeciesIndex << std::endl; // Print index of species being perturbed
+     std::cout << "PerturbNstanza " << PerturbNstanza << std::endl; // Print the number of stanza being perturbed 1 adults 2 juveniles
+     std::cout << "factorPerturb " << factorPerturb << std::endl; // Print factor of perturbation
+     std::cout << "PerturbStGroup " << PerturbStGroup << std::endl;
+   }
+     
+   
    for (y = StartYear; y <= EndYear; y++){
       if (y<1){stop("Adams Year can't be less than 1");}
    // Monthly loop                                     
@@ -297,17 +325,49 @@ int y, m, dd;
          NumericVector old_Ftime = as<NumericVector>(state["Ftime"]);         
  	       NumericVector dydt0     = as<NumericVector>(dyt["DerivT"]);
  	       NumericVector stanzaPred = as<NumericVector>(state["StanzaPred"]);
+ 	       
+ 	    // Axel's hack
+ 	    if(doPerturb){
+ 	      if(y==PerturbYear && m==0){
+ 	        for(int ist=1;ist <= PerturbNstanza ;ist++){
+ 	          REPORT(old_Biomass[PerturbSpeciesIndex + ist - 2]);
+ 	          old_Biomass[PerturbSpeciesIndex + ist-2] *= factorPerturb;
+ 	          REPORT(old_Biomass[PerturbSpeciesIndex + ist - 2]);
+ 	        }
+ 	        state["Biomass"] = old_Biomass;
+ 	        if(PerturbStGroup > 0){
+ 	          NumericMatrix NageS = as<NumericMatrix>(state["NageS"]);
+ 	          for(int ia = 0; ia < NageS.nrow(); ia++){
+ 	            NageS(ia, PerturbStGroup) *= factorPerturb;
+ 	          }
+ 	        }
+ 	      }
+ 	    }   
+ 	    
+ 	    // Axel's hack
+ 	    if(doPerturb){
+ 	      if(y==PerturbYear && m==0){
+ 	        for(int ist=1;ist <= PerturbNstanza ;ist++){
+ 	          REPORT(old_Biomass[PerturbSpeciesIndex + ist - 2]);
+ 	        }
+ 	      }
+ 	    }
  	                
       // Calculate new derivative    
  	       dyt   = deriv_vector(params, state, forcing, fishing, stanzas, y, m, 0);
       
       // Extract needed parts of the derivative
-         NumericVector dydt1       = as<NumericVector>(dyt["DerivT"]); 
+         NumericVector dydt1 = as<NumericVector>(dyt["DerivT"]);
+         if(doPerturb){
+           if(y==PerturbYear && m==0){
+             dydt0 = dydt1;
+           }
+         }
  				 NumericVector FoodGain    = as<NumericVector>(dyt["FoodGain"]);					
          NumericVector biomeq      = as<NumericVector>(dyt["biomeq"]);
          NumericVector FishingLoss = as<NumericVector>(dyt["FishingLoss"]);  
          NumericVector Qlink       = as<NumericVector>(dyt["Qlink"]);
-               
+	 
       // Now Update the new State Biomass using Adams-Basforth
          NumericVector new_Biomass = 
                        ifelse( NoIntegrate == 0,
@@ -315,6 +375,16 @@ int y, m, dd;
                          ifelse( NoIntegrate > 0,
                          old_Biomass + (DELTA_T / 2.0) * (3.0 * dydt1 - dydt0),
                          old_Biomass)); 
+         
+         // Axel's hack
+         // if(doPerturb){
+         //   if(y==PerturbYear && m==0){
+         //    REPORT("P1");
+         //     for(int ist=1;ist <= PerturbNstanza ;ist++){
+         //       REPORT(new_Biomass[PerturbSpeciesIndex + ist - 2]);
+         //     }
+         //   }
+         //  }
       
       // Then Update Foraging Time 
          NumericVector pd = ifelse(NoIntegrate < 0, stanzaPred, old_Biomass);
@@ -329,6 +399,16 @@ int y, m, dd;
           SplitSetPred(stanzas, state); 
         }
         new_Biomass = ifelse(NoIntegrate < 0, as<NumericVector>(state["Biomass"]), new_Biomass);
+        
+        // Axel's hack
+        // if(doPerturb){
+        //  if(y==PerturbYear && m==0){
+        //    REPORT("P2");
+        //    for(int ist=1;ist <= PerturbNstanza ;ist++){
+        //      REPORT(new_Biomass[PerturbSpeciesIndex + ist - 2]);
+        //    }
+        //  }
+        // }
         
      // Calculate catch assuming fixed Frate and exponential biomass change.
      // kya 9/10/15 - replaced with linear, diff on monthly scale is minor
@@ -360,6 +440,16 @@ int y, m, dd;
 
         NumericVector bforce = force_bybio((y-1) * STEPS_PER_YEAR + m, _);
         cur_Biomass = ifelse(bforce>B_BaseRef * EPSILON, bforce, cur_Biomass);
+        
+        // Axel's hack
+        // if(doPerturb){
+        //  if(y==PerturbYear && m==0){
+        //    REPORT("P3");
+        //    for(int ist=1;ist <= PerturbNstanza ;ist++){
+        //      REPORT(cur_Biomass[PerturbSpeciesIndex + ist - 2]);
+        //    }
+        //  }
+        // }
         
      // insert forced biomass levels    
         //for (i=0; i<NumForcedBio; i++){
