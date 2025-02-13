@@ -330,9 +330,9 @@ int y, m, dd;
  	    if(doPerturb){
  	      if(y==PerturbYear && m==0){
  	        for(int ist=1;ist <= PerturbNstanza ;ist++){
- 	          REPORT(old_Biomass[PerturbSpeciesIndex + ist - 2]);
+ 	          // REPORT(old_Biomass[PerturbSpeciesIndex + ist - 2]);
  	          old_Biomass[PerturbSpeciesIndex + ist-2] *= factorPerturb;
- 	          REPORT(old_Biomass[PerturbSpeciesIndex + ist - 2]);
+ 	          // REPORT(old_Biomass[PerturbSpeciesIndex + ist - 2]);
  	        }
  	        state["Biomass"] = old_Biomass;
  	        if(PerturbStGroup > 0){
@@ -348,7 +348,7 @@ int y, m, dd;
  	    if(doPerturb){
  	      if(y==PerturbYear && m==0){
  	        for(int ist=1;ist <= PerturbNstanza ;ist++){
- 	          REPORT(old_Biomass[PerturbSpeciesIndex + ist - 2]);
+ 	          // REPORT(old_Biomass[PerturbSpeciesIndex + ist - 2]);
  	        }
  	      }
  	    }
