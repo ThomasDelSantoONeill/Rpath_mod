@@ -2,7 +2,7 @@
 #include <fstream>
 #include <filesystem>
 #include "ecosim.h"
-#define REPORT(X) std::cout << #X << " = " << (X) << std::endl
+// #define REPORT(X) std::cout << #X << " = " << (X) << std::endl
 //################################################################----------
 // Runge-Kutta 4th order method for integrating Ecosim equations
 // Currently does not contain aged-structured species.
